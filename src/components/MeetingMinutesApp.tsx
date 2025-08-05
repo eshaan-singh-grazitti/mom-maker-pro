@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileUpload } from './FileUpload';
 import { ProcessingStatus } from './ProcessingStatus';
 import { MeetingMinutesEditor } from './MeetingMinutesEditor';
+import { ApiKeySettings } from './ApiKeySettings';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Sparkles, ArrowLeft } from 'lucide-react';
+import { FileText, Sparkles, ArrowLeft, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generateMeetingMinutes } from '@/lib/supabase';
+import { generateMeetingMinutes } from '@/lib/openai';
 
 interface ActionItem {
   id: string;
@@ -25,7 +26,7 @@ interface MeetingData {
   meetingDate: string;
 }
 
-type AppStep = 'upload' | 'processing' | 'editing';
+type AppStep = 'upload' | 'processing' | 'editing' | 'settings';
 
 export const MeetingMinutesApp = () => {
   const [currentStep, setCurrentStep] = useState<AppStep>('upload');
@@ -33,7 +34,16 @@ export const MeetingMinutesApp = () => {
   const [processingStep, setProcessingStep] = useState('');
   const [progress, setProgress] = useState(0);
   const [meetingData, setMeetingData] = useState<MeetingData | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const apiKey = localStorage.getItem('openai_api_key');
+    setHasApiKey(!!apiKey);
+    if (!apiKey) {
+      setCurrentStep('settings');
+    }
+  }, []);
 
   const processWithAI = async (transcript: string, meetingTitle?: string) => {
     setIsProcessing(true);
@@ -116,6 +126,15 @@ export const MeetingMinutesApp = () => {
     setProgress(0);
   };
 
+  const handleApiKeySet = () => {
+    setHasApiKey(true);
+    setCurrentStep('upload');
+  };
+
+  const handleShowSettings = () => {
+    setCurrentStep('settings');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-4 py-8">
@@ -126,6 +145,17 @@ export const MeetingMinutesApp = () => {
               <FileText className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-3xl font-bold">AI Meeting Minutes Generator</h1>
+            {hasApiKey && currentStep !== 'settings' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShowSettings}
+                className="ml-4"
+              >
+                <Settings className="w-4 h-4 mr-1" />
+                Settings
+              </Button>
+            )}
           </div>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Transform your meeting recordings or transcripts into professional minutes with AI-powered automation
@@ -134,6 +164,23 @@ export const MeetingMinutesApp = () => {
 
         {/* Main Content */}
         <div className="max-w-4xl mx-auto">
+          {currentStep === 'settings' && (
+            <div className="space-y-6">
+              {hasApiKey && (
+                <div className="flex items-center space-x-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep('upload')}
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back to Upload
+                  </Button>
+                </div>
+              )}
+              <ApiKeySettings onApiKeySet={handleApiKeySet} />
+            </div>
+          )}
+
           {currentStep === 'upload' && (
             <Card className="shadow-medium">
               <CardContent className="p-8">

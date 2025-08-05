@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Sparkles, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { generateMeetingMinutes } from '@/lib/supabase';
 
 interface ActionItem {
   id: string;
@@ -34,93 +35,66 @@ export const MeetingMinutesApp = () => {
   const [meetingData, setMeetingData] = useState<MeetingData | null>(null);
   const { toast } = useToast();
 
-  const simulateProcessing = async () => {
+  const processWithAI = async (transcript: string, meetingTitle?: string) => {
     setIsProcessing(true);
     setCurrentStep('processing');
     
-    const steps = [
-      { step: 'upload', duration: 1000, progress: 20 },
-      { step: 'transcription', duration: 3000, progress: 40 },
-      { step: 'diarization', duration: 2000, progress: 60 },
-      { step: 'extraction', duration: 2000, progress: 80 },
-      { step: 'generation', duration: 1500, progress: 100 }
-    ];
+    try {
+      // Step 1: Upload/Validation
+      setProcessingStep('upload');
+      setProgress(20);
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-    for (const { step, duration, progress: stepProgress } of steps) {
-      setProcessingStep(step);
-      setProgress(stepProgress);
-      await new Promise(resolve => setTimeout(resolve, duration));
+      // Step 2: AI Processing
+      setProcessingStep('extraction');
+      setProgress(60);
+      
+      const data = await generateMeetingMinutes(
+        transcript, 
+        meetingTitle || "Meeting Minutes",
+        new Date().toISOString().split('T')[0]
+      );
+
+      // Step 3: Finalizing
+      setProcessingStep('generation');
+      setProgress(100);
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setMeetingData(data);
+      setIsProcessing(false);
+      setCurrentStep('editing');
+      
+      toast({
+        title: "Processing complete!",
+        description: "Your meeting minutes have been generated and are ready for review.",
+      });
+    } catch (error) {
+      console.error('Error processing meeting:', error);
+      setIsProcessing(false);
+      setCurrentStep('upload');
+      toast({
+        title: "Processing failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      });
     }
-
-    // Generate mock meeting data
-    const mockData: MeetingData = {
-      meetingTitle: "Weekly Team Standup",
-      meetingDate: new Date().toISOString().split('T')[0],
-      attendees: [
-        "Sarah Johnson (Product Manager)",
-        "Mike Chen (Lead Developer)",
-        "Emma Wilson (UX Designer)",
-        "Alex Rodriguez (Marketing Lead)"
-      ],
-      agenda: [
-        "Project progress review and milestone updates",
-        "Technical challenges and solutions discussion",
-        "Marketing campaign launch timeline",
-        "Resource allocation for Q2 initiatives"
-      ],
-      summary: "The team discussed significant progress on the Q1 project deliverables. Mike highlighted that the backend API development is 90% complete, ahead of schedule. Emma presented the final UI designs which received positive feedback from stakeholders. Alex confirmed the marketing campaign will launch next Tuesday with all assets approved. The team addressed concerns about resource allocation for the upcoming Q2 initiatives and agreed on a phased approach to manage workload effectively.",
-      decisions: [
-        "Approved final UI designs for production release",
-        "Confirmed marketing campaign launch date for next Tuesday",
-        "Adopted phased approach for Q2 resource allocation",
-        "Extended backend API testing phase by one week for quality assurance"
-      ],
-      actionItems: [
-        {
-          id: "1",
-          task: "Complete backend API testing and deployment to staging environment",
-          owner: "Mike Chen",
-          deadline: "2024-03-15"
-        },
-        {
-          id: "2",
-          task: "Finalize marketing assets and coordinate with design team for last-minute adjustments",
-          owner: "Alex Rodriguez",
-          deadline: "2024-03-12"
-        },
-        {
-          id: "3",
-          task: "Conduct user acceptance testing on new UI components",
-          owner: "Emma Wilson",
-          deadline: "2024-03-18"
-        },
-        {
-          id: "4",
-          task: "Prepare Q2 resource allocation proposal and present to leadership",
-          owner: "Sarah Johnson",
-          deadline: "2024-03-20"
-        }
-      ]
-    };
-
-    setMeetingData(mockData);
-    setIsProcessing(false);
-    setCurrentStep('editing');
-    
-    toast({
-      title: "Processing complete!",
-      description: "Your meeting minutes have been generated and are ready for review.",
-    });
   };
 
   const handleFileUpload = async (file: File, type: 'audio' | 'transcript') => {
-    console.log('File uploaded:', file.name, 'Type:', type);
-    await simulateProcessing();
+    if (type === 'transcript') {
+      const text = await file.text();
+      await processWithAI(text, file.name.replace(/\.[^/.]+$/, ""));
+    } else {
+      toast({
+        title: "Audio processing not implemented",
+        description: "Audio transcription is not yet implemented. Please upload a text transcript instead.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleTranscriptInput = async (text: string) => {
-    console.log('Transcript provided:', text.substring(0, 100) + '...');
-    await simulateProcessing();
+    await processWithAI(text);
   };
 
   const handleSaveMeeting = (data: MeetingData) => {
